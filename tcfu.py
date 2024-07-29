@@ -102,25 +102,44 @@ class Enemy(pygame.sprite.Sprite):
         pygame.draw.polygon(self.image, RED, [(10, 0), (20, 40), (0, 40)])
         self.rect = self.image.get_rect()
         self.angle = angle
-        self.radius = 100
+        self.radius = 0  # Start from the center
         self.center_x = SCREEN_WIDTH // 2
         self.center_y = SCREEN_HEIGHT // 2
+        self.speed = 2  # Speed of angle change
+        self.radial_speed = 0.5  # Speed of radius change (move outwards first)
         self.update_position()
+        self.off_screen_time = 0
 
     def update_position(self):
         self.rect.x = self.center_x + int(self.radius * math.cos(math.radians(self.angle)))
         self.rect.y = self.center_y + int(self.radius * math.sin(math.radians(self.angle)))
-    
+
     def update(self):
-        self.angle += 2
-        self.radius += 0.05
+        self.angle += self.speed
+
+        # Move outwards
+        self.radius += self.radial_speed
+
         self.update_position()
 
+        # Check if enemy is off-screen and re-enter from the opposite side
+        if self.rect.top > SCREEN_HEIGHT:
+            self.rect.bottom = 0
+        elif self.rect.bottom < 0:
+            self.rect.top = SCREEN_HEIGHT
+        elif self.rect.left > SCREEN_WIDTH:
+            self.rect.right = 0
+        elif self.rect.right < 0:
+            self.rect.left = SCREEN_WIDTH
+
+        # Optionally reset the radius and angle to create a looping effect
         if (self.rect.top > SCREEN_HEIGHT or
+            self.rect.bottom < 0 or
             self.rect.left > SCREEN_WIDTH or
-            self.rect.right < 0 or
-            self.rect.bottom < 0):
-            self.kill()
+            self.rect.right < 0):
+            self.radius = 0
+            self.angle = random.randint(0, 360)
+            self.update_position()
 
 # Initialize Pygame sprite groups
 all_sprites = pygame.sprite.Group()
@@ -189,6 +208,11 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
 
 
 
