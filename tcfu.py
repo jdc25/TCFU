@@ -55,6 +55,7 @@ class Player(pygame.sprite.Sprite):
         self.angle = 0
         self.radius = min(SCREEN_WIDTH, SCREEN_HEIGHT) // 2 - 50
         self.speed = 0.05  # Rotation speed in radians
+        self.visible = True  # Player visibility flag
 
     def update(self):
         # Update player position in a circular path around the center
@@ -72,6 +73,14 @@ class Player(pygame.sprite.Sprite):
         # Apply rotation to the player image
         self.image = pygame.transform.rotate(self.original_image, -math.degrees(self.angle))
         self.rect = self.image.get_rect(center=self.rect.center)
+
+    def flicker(self):
+        # Toggle visibility
+        self.visible = not self.visible
+        if self.visible:
+            self.image.set_alpha(255)
+        else:
+            self.image.set_alpha(0)
 
     def shoot(self):
         # Bullet direction should be towards the center
@@ -249,6 +258,8 @@ def main_game():
     global score, lives
     score = 0
     lives = 3
+    invincibility_duration = 60  # Invincibility frames after a collision (1 second if 60 FPS)
+    invincibility_timer = 0
 
     initialize_game()
 
@@ -267,22 +278,30 @@ def main_game():
         if pygame.sprite.groupcollide(enemies, bullets, True, True):
             score += 50  # Increase score by 50 for each enemy destroyed
 
-        # Check for enemy-player collisions
-        if pygame.sprite.spritecollideany(player, enemies):
-            lives -= 1  # Lose a life
-            if lives <= 0:
-                running = False  # End game if no lives left
-            else:
-                # Reset player position
-                player.rect.centerx = SCREEN_WIDTH // 2
-                player.rect.centery = SCREEN_HEIGHT // 2
-                player.angle = 0
+        # Check for enemy-player collisions if not invincible
+        if invincibility_timer == 0:
+            if pygame.sprite.spritecollideany(player, enemies):
+                lives -= 1  # Lose a life
+                invincibility_timer = invincibility_duration  # Activate invincibility
+                if lives <= 0:
+                    running = False  # End game if no lives left
+                else:
+                    # Reset player position to the center and ensure it's safe
+                    player.rect.centerx = SCREEN_WIDTH // 2
+                    player.rect.centery = SCREEN_HEIGHT // 2
+                    player.angle = 0
+                    player.visible = True  # Ensure player is visible after respawn
+        else:
+            invincibility_timer -= 1
+            player.flicker()
 
         # Fill the screen with black color
         screen.fill(BLACK)
 
-        # Draw all sprites
-        all_sprites.draw(screen)
+        # Draw all sprites, handle player visibility
+        for sprite in all_sprites:
+            if sprite != player or player.visible:
+                screen.blit(sprite.image, sprite.rect)
 
         # Display the score and lives
         score_text = font.render(f"Score: {score}", True, WHITE)
