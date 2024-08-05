@@ -2,6 +2,7 @@ import pygame
 import sys
 import random
 import math
+import os
 
 # Initialize Pygame
 pygame.init()
@@ -25,6 +26,16 @@ clock = pygame.time.Clock()
 
 # Font for displaying the score and lives
 font = pygame.font.SysFont(None, 36)
+
+# Print current working directory for debugging
+print("Current Working Directory:", os.getcwd())
+
+# Verify the assets path
+assets_path = os.path.join(os.getcwd(), 'assets', 'enemy_jet.png')
+if not os.path.exists(assets_path):
+    print(f"File not found: {assets_path}")
+    pygame.quit()
+    sys.exit()
 
 # Starfield class
 class Star(pygame.sprite.Sprite):
@@ -99,7 +110,7 @@ class Player(pygame.sprite.Sprite):
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, dx, dy):
         super(Bullet, self).__init__()
-        self.image = pygame.Surface((5, 10))
+        self.image = pygame.Surface((5, 10), pygame.SRCALPHA)  # Use SRCALPHA for transparency
         self.image.fill(GREEN)
         self.rect = self.image.get_rect()
         self.rect.centerx = x
@@ -116,17 +127,19 @@ class Bullet(pygame.sprite.Sprite):
             self.rect.right > SCREEN_WIDTH):
             self.kill()
 
-# Enemy class with spaceship design
+# Enemy class with image loading
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, angle):
         super(Enemy, self).__init__()
-        self.image = pygame.Surface((40, 30), pygame.SRCALPHA)
-        self.image.fill((0, 0, 0, 0))  # Transparent background
-
-        # Draw a simple spaceship shape
-        pygame.draw.polygon(self.image, RED, [(20, 0), (40, 30), (0, 30)])
-        pygame.draw.rect(self.image, RED, (15, 20, 10, 5))  # Add a small rectangle for detail
-
+        try:
+            # Load the enemy sprite from the 'assets' folder with transparency support
+            self.original_image = pygame.image.load(assets_path).convert_alpha()
+            # Resize the image to match the original Gyruss size
+            self.image = pygame.transform.scale(self.original_image, (32, 32))
+        except pygame.error as e:
+            print(f"Error loading image: {e}")
+            pygame.quit()
+            sys.exit()
         self.rect = self.image.get_rect()
         self.angle = angle
         self.radius = 0  # Start from the center
@@ -217,30 +230,25 @@ def start_menu():
                     pygame.quit()
                     sys.exit()
                 elif event.key == pygame.K_i:
-                    show_instructions()
+                    instructions_menu()
         
         pygame.display.flip()
         clock.tick(60)
 
-def show_instructions():
-    instruction_font = pygame.font.SysFont(None, 48)
-    instructions = [
-        "Use LEFT and RIGHT arrow keys to rotate.",
-        "Press SPACE to shoot.",
-        "Avoid enemies and survive as long as possible.",
+def instructions_menu():
+    instructions_font = pygame.font.SysFont(None, 36)
+    instructions_lines = [
+        "Use the LEFT and RIGHT arrow keys to rotate the player.",
+        "Press SPACE to shoot bullets towards the center.",
+        "Avoid enemy ships and shoot them down.",
         "Press ESC to return to the main menu."
     ]
-    instructions_texts = [instruction_font.render(line, True, WHITE) for line in instructions]
     
     while True:
         screen.fill(BLACK)
-        y_offset = 50
-        for text in instructions_texts:
-            screen.blit(text, (20, y_offset))
-            y_offset += 50
-        
-        quit_text = font.render("Press ESC to return", True, WHITE)
-        screen.blit(quit_text, (SCREEN_WIDTH // 2 - quit_text.get_width() // 2, SCREEN_HEIGHT - 50))
+        for i, line in enumerate(instructions_lines):
+            instruction_text = instructions_font.render(line, True, WHITE)
+            screen.blit(instruction_text, (SCREEN_WIDTH // 2 - instruction_text.get_width() // 2, SCREEN_HEIGHT // 3 + i * 40))
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -253,67 +261,99 @@ def show_instructions():
         pygame.display.flip()
         clock.tick(60)
 
-# Main game loop
-def main_game():
-    global score, lives
-    score = 0
-    lives = 3
-    invincibility_duration = 60  # Invincibility frames after a collision (1 second if 60 FPS)
-    invincibility_timer = 0
-
-    initialize_game()
-
-    running = True
-    while running:
+def game_over():
+    over_font = pygame.font.SysFont(None, 74)
+    over_text = over_font.render("Game Over", True, RED)
+    restart_text = font.render("Press ENTER to Restart", True, WHITE)
+    quit_text = font.render("Press ESC to Quit", True, WHITE)
+    
+    while True:
+        screen.fill(BLACK)
+        screen.blit(over_text, (SCREEN_WIDTH // 2 - over_text.get_width() // 2, SCREEN_HEIGHT // 3))
+        screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2))
+        screen.blit(quit_text, (SCREEN_WIDTH // 2 - quit_text.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    return
+                elif event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+        
+        pygame.display.flip()
+        clock.tick(60)
+
+# Main game loop
+def main():
+    initialize_game()
+    score = 0
+    lives = 3
+    invincible = False
+    invincible_timer = 0
+    flicker_timer = 0
+    
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     player.shoot()
-
+                elif event.key == pygame.K_ESCAPE:
+                    game_over()
+        
+        if invincible:
+            flicker_timer += 1
+            if flicker_timer % 5 == 0:
+                player.flicker()
+            invincible_timer += 1
+            if invincible_timer > 120:  # Invincible for 2 seconds
+                invincible = False
+                player.image.set_alpha(255)
+        
+        # Update all sprites
         all_sprites.update()
-
-        # Check for bullet-enemy collisions
-        if pygame.sprite.groupcollide(enemies, bullets, True, True):
-            score += 50  # Increase score by 50 for each enemy destroyed
-
-        # Check for enemy-player collisions if not invincible
-        if invincibility_timer == 0:
-            if pygame.sprite.spritecollideany(player, enemies):
-                lives -= 1  # Lose a life
-                invincibility_timer = invincibility_duration  # Activate invincibility
+        
+        # Check for collisions between bullets and enemies
+        hits = pygame.sprite.groupcollide(bullets, enemies, True, True)
+        for hit in hits:
+            score += 10
+            enemy = Enemy(random.randint(0, 360))
+            all_sprites.add(enemy)
+            enemies.add(enemy)
+        
+        # Check for collisions between player and enemies
+        if not invincible:
+            hits = pygame.sprite.spritecollide(player, enemies, True)
+            for hit in hits:
+                lives -= 1
                 if lives <= 0:
-                    running = False  # End game if no lives left
+                    game_over()
                 else:
-                    # Reset player position to the center and ensure it's safe
-                    player.rect.centerx = SCREEN_WIDTH // 2
-                    player.rect.centery = SCREEN_HEIGHT // 2
-                    player.angle = 0
-                    player.visible = True  # Ensure player is visible after respawn
-        else:
-            invincibility_timer -= 1
-            player.flicker()
-
-        # Fill the screen with black color
+                    invincible = True
+                    invincible_timer = 0
+                    flicker_timer = 0
+                enemy = Enemy(random.randint(0, 360))
+                all_sprites.add(enemy)
+                enemies.add(enemy)
+        
+        # Draw everything
         screen.fill(BLACK)
-
-        # Draw all sprites, handle player visibility
-        for sprite in all_sprites:
-            if sprite != player or player.visible:
-                screen.blit(sprite.image, sprite.rect)
-
-        # Display the score and lives
+        all_sprites.draw(screen)
+        
+        # Draw score and lives
         score_text = font.render(f"Score: {score}", True, WHITE)
-        screen.blit(score_text, (10, 10))
         lives_text = font.render(f"Lives: {lives}", True, WHITE)
-        screen.blit(lives_text, (10, 50))
-
+        screen.blit(score_text, (10, 10))
+        screen.blit(lives_text, (SCREEN_WIDTH - lives_text.get_width() - 10, 10))
+        
         pygame.display.flip()
-
         clock.tick(60)
 
-if __name__ == "__main__":
-    while True:
-        start_menu()
-        main_game()
+start_menu()
+main()
