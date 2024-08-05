@@ -67,6 +67,7 @@ class Player(pygame.sprite.Sprite):
         self.radius = min(SCREEN_WIDTH, SCREEN_HEIGHT) // 2 - 50
         self.speed = 0.05  # Rotation speed in radians
         self.visible = True  # Player visibility flag
+        self.alpha = 255    # Initial alpha value
 
     def update(self):
         # Update player position in a circular path around the center
@@ -84,14 +85,14 @@ class Player(pygame.sprite.Sprite):
         # Apply rotation to the player image
         self.image = pygame.transform.rotate(self.original_image, -math.degrees(self.angle))
         self.rect = self.image.get_rect(center=self.rect.center)
+        self.image.set_alpha(self.alpha)
 
     def flicker(self):
-        # Toggle visibility
-        self.visible = not self.visible
-        if self.visible:
-            self.image.set_alpha(255)
+        # Toggle visibility by changing alpha value
+        if self.alpha == 255:
+            self.alpha = 0
         else:
-            self.image.set_alpha(0)
+            self.alpha = 255
 
     def shoot(self):
         # Bullet direction should be towards the center
@@ -248,28 +249,27 @@ def instructions_menu():
         screen.fill(BLACK)
         for i, line in enumerate(instructions_lines):
             instruction_text = instructions_font.render(line, True, WHITE)
-            screen.blit(instruction_text, (SCREEN_WIDTH // 2 - instruction_text.get_width() // 2, SCREEN_HEIGHT // 3 + i * 40))
+            screen.blit(instruction_text, (SCREEN_WIDTH // 2 - instruction_text.get_width() // 2, SCREEN_HEIGHT // 4 + i * 40))
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    return
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                return
         
         pygame.display.flip()
         clock.tick(60)
 
 def game_over():
-    over_font = pygame.font.SysFont(None, 74)
-    over_text = over_font.render("Game Over", True, RED)
+    game_over_font = pygame.font.SysFont(None, 74)
+    game_over_text = game_over_font.render("Game Over", True, RED)
     restart_text = font.render("Press ENTER to Restart", True, WHITE)
     quit_text = font.render("Press ESC to Quit", True, WHITE)
     
     while True:
         screen.fill(BLACK)
-        screen.blit(over_text, (SCREEN_WIDTH // 2 - over_text.get_width() // 2, SCREEN_HEIGHT // 3))
+        screen.blit(game_over_text, (SCREEN_WIDTH // 2 - game_over_text.get_width() // 2, SCREEN_HEIGHT // 3))
         screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2))
         screen.blit(quit_text, (SCREEN_WIDTH // 2 - quit_text.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
         
@@ -279,6 +279,7 @@ def game_over():
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
+                    main()
                     return
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
@@ -287,7 +288,6 @@ def game_over():
         pygame.display.flip()
         clock.tick(60)
 
-# Main game loop
 def main():
     initialize_game()
     score = 0
@@ -295,7 +295,7 @@ def main():
     invincible = False
     invincible_timer = 0
     flicker_timer = 0
-    
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -309,12 +309,13 @@ def main():
         
         if invincible:
             flicker_timer += 1
-            if flicker_timer % 5 == 0:
+            if flicker_timer % 5 == 0:  # Adjust the flicker frequency if needed
                 player.flicker()
             invincible_timer += 1
             if invincible_timer > 120:  # Invincible for 2 seconds
                 invincible = False
-                player.image.set_alpha(255)
+                player.alpha = 255
+                player.image.set_alpha(player.alpha)
         
         # Update all sprites
         all_sprites.update()
@@ -323,13 +324,10 @@ def main():
         hits = pygame.sprite.groupcollide(bullets, enemies, True, True)
         for hit in hits:
             score += 10
-            enemy = Enemy(random.randint(0, 360))
-            all_sprites.add(enemy)
-            enemies.add(enemy)
         
         # Check for collisions between player and enemies
         if not invincible:
-            hits = pygame.sprite.spritecollide(player, enemies, True)
+            hits = pygame.sprite.spritecollide(player, enemies, False)
             for hit in hits:
                 lives -= 1
                 if lives <= 0:
@@ -338,9 +336,6 @@ def main():
                     invincible = True
                     invincible_timer = 0
                     flicker_timer = 0
-                enemy = Enemy(random.randint(0, 360))
-                all_sprites.add(enemy)
-                enemies.add(enemy)
         
         # Draw everything
         screen.fill(BLACK)
